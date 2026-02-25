@@ -70,7 +70,7 @@ fetch('/api/right').then(res => res.text()).then(data => document.getElementById
     <div class="block w-full text-left px-4 py-2 hover:bg-white/10 text-sm"><input class="public-input" title="${Title}" type="checkbox" id="${Title}-check"><label for="${Title}-check">Public</label></div>
     <button class="block w-full text-left px-4 py-2 hover:bg-white/10 text-sm" onclick="editcard('${Title}')">Edit</button>
     <button class="block w-full text-left px-4 py-2 hover:bg-white/10 text-sm text-red-400" onclick="deleteset('${Title}')">Delete</button>
-</div>
+    </div>
 
 <div id="card-options" class="row-start-1 grid grid-cols-5 items-center">
     <svg 

@@ -1,0 +1,7 @@
+[
+    {
+        "hcai" : "Hackclub AI api key here",
+        "hcsearch" : "Hackclub search api",
+        "model" : "Your prefered ai model i recomend gemini 3 flash"
+    }
+]

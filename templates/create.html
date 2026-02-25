@@ -107,6 +107,7 @@ aiDiv.style.top = offset + 'px';
             }
         }
         async function createwithai(){
+            setaistatus('Warming AI up...', 2000)
             const message = document.getElementById('Ai-message').value
             const target = document.getElementById('target').value
             const params = new URLSearchParams({
@@ -131,7 +132,7 @@ aiDiv.style.top = offset + 'px';
                     alert("Error: " + data.error);
                     eventSource.close();
                 } else {
-                    setaistatus(data.status)
+                    setaistatus(data.status, 5000)
                 }
             };
         }
