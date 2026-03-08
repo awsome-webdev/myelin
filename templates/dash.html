@@ -178,6 +178,7 @@ fetch('/api/right').then(res => res.text()).then(data => document.getElementById
         window.location.href = `/viewcard?setname=${setname}`;
     }
     async function deleteset(name){
+        if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
         await fetch(`/api/delete?name=${name}`)
         .then( respons => {
             if (!respons.ok){

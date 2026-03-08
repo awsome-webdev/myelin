@@ -164,16 +164,27 @@ async function checkoffline() {
             window.location.href = `/create?edit=${encodeURIComponent(title)}`;
         }
 
-        async function deleteset(name) {
-            if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
-            
-            try {
-                const response = await fetch(`/api/delete?name=${encodeURIComponent(name)}`);
-                if (!response.ok) throw new Error('Delete failed');
-                window.location.href = '/dash';
-            } catch (err) {
-                alert('An error occurred while deleting the set.');
+        async function deleteset(name){
+        if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
+        await fetch(`/api/delete?name=${name}`)
+        .then( respons => {
+            if (!respons.ok){
+                alert('UKNOWN ERROR')
             }
+        })
+            const files = await window.fs.ls('/')
+            for (let i=0; i < files.length; i++){
+                    const file = files[i]
+                    const filename = file.name.replace('.txt', '')
+                    console.log(filename)
+                    console.log(file)
+                    console.log(name)
+                    if (filename === name){
+                        console.log('deleting')
+                        await window.fs.delete(`${name}.txt`)
+                    }
+            }
+            window.location.href = '/dash'
         }
 
         async function loadcards() {
@@ -199,6 +210,14 @@ async function checkoffline() {
         let bg;
         let total = 0
         let fet
+        let btn =  `<button class="block w-full text-left px-4 py-2 hover:bg-white/10 text-sm text-white" onclick="saveset('${Title}')">Save set</button>`;
+        const files = await window.fs.ls('/')
+        for (let i=0; i<files.length; i++){
+            file = files[i]
+            if (file.name.replace('.txt', '') === Title){
+                btn = ''
+            }
+        }
         try{
             fet = await fetch(`/api/getpercent?title=${encodeURIComponent(Title)}`)
         }
@@ -230,7 +249,7 @@ async function checkoffline() {
                 <div class="block w-full text-left px-4 py-2 hover:bg-white/10 text-sm"><input class="public-input mr-2" title="${Title}" type="checkbox" id="${Title}-check"><label for="${Title}-check">Public</label></div>
                 <button class="block w-full text-left px-4 py-2 hover:bg-white/10 text-sm" onclick="editcard('${Title}')">Edit</button>
                 <button class="block w-full text-left px-4 py-2 hover:bg-white/10 text-sm text-red-400" onclick="deleteset('${Title}')">Delete</button>
-                <button class="block w-full text-left px-4 py-2 hover:bg-white/10 text-sm text-white" onclick="saveset('${Title}')">Save set</button>
+                ${btn}
                 </div>
                 <div>
                         <svg 
