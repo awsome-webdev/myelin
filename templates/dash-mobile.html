@@ -14,11 +14,145 @@
 
     <main id="cards" class="grid grid-cols-1 md:grid-cols-2 gap-6 px-6 md:px-10 max-w-7xl mx-auto">
         </main>
+<script type="module">
+class filesystem{
+    constructor(){
+        this.root = null
+    }
+    async init(){
+        this.root = await navigator.storage.getDirectory()
+    }
+    async write(filename, data) {
+        try{
+            const file = await this.root.getFileHandle(filename, {create : true})
+            const write = await file.createWritable()
+            await write.write(data)
+            await write.close()
+            return true
+        }
+        catch{
+            return false
+        }
+    }
+    async read(filename){
+        try{
+        const file = await this.root.getFileHandle(filename, {create : true})
+        const read = await file.getFile()
+        const content = await read.text()
+        return content
+        }
+        catch(e){
+            return e
+        }
 
+    }
+    async delete(filename){
+        try{
+            await this.root.removeEntry(filename)
+        }
+        catch(e){
+            return e
+        }
+    }
+    async mkdir(directory){
+        const dir = await this.root.getDirectoryHandle(directory, {create : true})
+    }
+    async ls(dirPath) {
+    let currentHandle = this.root;
+    const folders = dirPath.split('/').filter(Boolean);
+    
+    for (const folder of folders) {
+        currentHandle = await currentHandle.getDirectoryHandle(folder, { create: false });
+    }
+
+    const contents = [];
+    for await (const [name, handle] of currentHandle.entries()) {
+        contents.push({ name, kind: handle.kind });
+    }
+    
+    console.log(`Contents of ${dirPath}:`, contents);
+    return contents;
+}
+
+}
+const fs = new filesystem
+await fs.init()
+window.fs = fs
+</script>
     <script>
+        async function syncOfflineData() {
+    if (navigator.onLine) {
+        const queue = JSON.parse(localStorage.getItem('fetchqueue') || "[]");
+        if (queue.length === 0) return;
+
+        console.log(`Syncing ${queue.length} offline results...`);
+        
+        for (let i = 0; i < queue.length; i++) {
+            const item = queue[i];
+            try {
+                await fetch(item.target, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(item.body)
+                });
+            } catch (err) {
+                console.error("Sync failed for item, keeping in queue.");
+                return; // Stop and try again next time if server is still down
+            }
+        }
+        
+        localStorage.removeItem('fetchqueue');
+    }
+}
+async function saveset(title){
+    const usernameres = await fetch('/api/getusername')
+    const username = await usernameres.text()
+    const res = await fetch(`/api/allcards?user=${username}&title=${title}`)
+    const json = await res.json()
+    const jsonstring = JSON.stringify(json)
+    window.fs.write(`${title}.txt`, jsonstring)
+    alert('Saved Set!')
+}
+async function checkoffline() {
+    let isOnline = false;
+    // 1. Try to check network status
+    try {
+        const res = await fetch('/login');
+        if (res.ok) {
+            isOnline = true;
+            syncOfflineData()
+        }
+    } catch (e) {
+        // Fetch failed, we are definitely offline
+        console.log("Network unreachable, checking local cache...");
+        isOnline = false;
+        alert("You appear to be offline, you can still study and use sets you saved. Just note that some features are unavailable")
+    }
+
+    // 2. If we are offline, load local cards
+    if (!isOnline) {
+        clearCards();
+        try {
+            const files = await window.fs.ls('/');
+            console.log(files)
+            for (let i = 0; i < files.length; i++) {
+                if (files[i].kind === 'file' && files[i].name.includes('.txt')) {
+                    const data = await window.fs.read(files[i].name);
+                    const json = JSON.parse(data);
+                    json.forEach(obj => {
+                        createcard(obj.Title, obj.cards, obj.description)
+                    })
+                }
+            }
+        } catch (e) {
+            console.log('No offline cards found or filesystem error');
+        }
+    }
+}
         // Load cards on startup
         setTimeout(function(){
             udpatepubliccheckbox()
+            checkoffline()
         }, 1000)
         loadcards();
 
@@ -58,28 +192,46 @@
         }
 
         async function createcard(Title, cardCount, desc) { 
-        const fet = await fetch(`/api/getpercent?title=${encodeURIComponent(Title)}`)
+        let offline = false
+        let extrastyle = ''
+        let data;
+        let avg;
+        let bg;
+        let total = 0
+        let fet
+        try{
+            fet = await fetch(`/api/getpercent?title=${encodeURIComponent(Title)}`)
+        }
+        catch(e){
+            offline = true
+        }
+        if (offline === true){
+            extastyle = 'hidden'
+        }
+        if (!offline){
         data = await fet.json()
-        total = 0
         data.forEach(function(item){
             total += parseInt(item)
         })
         avg = total / data.length || 0
         const confidence = data.length / (data.length + 2);
         avg = (avg * confidence).toFixed(2);
-        bg = avg > 80 ? 'bg-green-500/20' : avg > 45 ? 'bg-yellow-500/20' : 'bg-red-500/20'
+        bg = avg > 80 ? 'bg-green-500/20' : avg > 45 ? 'bg-yellow-500/20' : 'bg-red-500/20'    
+        } 
+        else{
+            avg = 0
+            bg = ''
+        }
             const card = document.createElement("div");
             // Modern glassmorphism style, flexible height for mobile
-            card.className = "grid min-w-0 break-words grid-rows-[auto_1fr_auto]  border border-white/10 rounded-2xl overflow-hidden hover:border-white/30 transition-all";
-            card.classList.add(bg)
-            card.setAttribute('title', avg > 80 ? `Your memory score is ${avg}` : avg > 45 ? `score: ${avg}, not bad needs improvment` : 'You really need to work on this');
-            card.setAttribute('title', avg > 80 ? 'Great job! Your average score is above 80%.' : avg > 45 ? 'Not bad! Your average score is above 45%.' : 'Needs improvement. Your average score is below 45%.');
+            card.className = "grid min-w-0 break-words grid-rows-[auto_1fr_auto]  border border-white/10 rounded-2xl overflow-hidden hover:border-white/30 transition-all " + bg;
             card.innerHTML = `
             <div id="menu-${Title}" popover class="fixed w-40 bg-slate-800 border border-white/10 rounded-md shadow-2xl z-[100] py-2">
                 <div class="block w-full text-left px-4 py-2 hover:bg-white/10 text-sm"><input class="public-input mr-2" title="${Title}" type="checkbox" id="${Title}-check"><label for="${Title}-check">Public</label></div>
                 <button class="block w-full text-left px-4 py-2 hover:bg-white/10 text-sm" onclick="editcard('${Title}')">Edit</button>
                 <button class="block w-full text-left px-4 py-2 hover:bg-white/10 text-sm text-red-400" onclick="deleteset('${Title}')">Delete</button>
-            </div>
+                <button class="block w-full text-left px-4 py-2 hover:bg-white/10 text-sm text-white" onclick="saveset('${Title}')">Save set</button>
+                </div>
                 <div>
                         <svg 
                             onclick="
@@ -142,6 +294,9 @@
         });
     });
 }
-    </script>
+function clearCards(){
+    document.getElementById("cards").innerHTML = ''
+}
+</script>
 </body>
 </html>

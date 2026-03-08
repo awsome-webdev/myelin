@@ -19,11 +19,11 @@
         <div id="headstats" class="w-full h-[20vh] items-center justify-items-center grid grid-cols-[1fr_1fr]">
             <div id="right" class="col-start-1 h-fit w-fit col-end-1 p-5 text-center glass-panel rounded-md">
                 <p class="text-3xl">Questions answered right</p>
-                <p id="right-text" class="text-green-500 text-3xl">3</p>
+                <p id="right-text" class="text-green-500 text-3xl">Offline</p>
             </div>
             <div id="wrong" class="col-start-2 h-fit w-fit col-end-2 p-5 text-center glass-panel rounded-md">
                 <p class="text-3xl">Questions answered wrong</p>
-                <p id="wrong-text" class="text-green-500 text-3xl">3</p>
+                <p id="wrong-text" class="text-green-500 text-3xl">Offline</p>
             </div>
         </div>
         <h1 class="m-10 text-3xl">Your sets:</h1>
@@ -32,9 +32,144 @@
         </div>
     </body>
 </html>
+<script type="module">
+class filesystem{
+    constructor(){
+        this.root = null
+    }
+    async init(){
+        this.root = await navigator.storage.getDirectory()
+    }
+    async write(filename, data) {
+        try{
+            const file = await this.root.getFileHandle(filename, {create : true})
+            const write = await file.createWritable()
+            await write.write(data)
+            await write.close()
+            return true
+        }
+        catch{
+            return false
+        }
+    }
+    async read(filename){
+        try{
+        const file = await this.root.getFileHandle(filename, {create : true})
+        const read = await file.getFile()
+        const content = await read.text()
+        return content
+        }
+        catch(e){
+            return e
+        }
+
+    }
+    async delete(filename){
+        try{
+            await this.root.removeEntry(filename)
+        }
+        catch(e){
+            return e
+        }
+    }
+    async mkdir(directory){
+        const dir = await this.root.getDirectoryHandle(directory, {create : true})
+    }
+    async ls(dirPath) {
+    let currentHandle = this.root;
+    const folders = dirPath.split('/').filter(Boolean);
+    
+    for (const folder of folders) {
+        currentHandle = await currentHandle.getDirectoryHandle(folder, { create: false });
+    }
+
+    const contents = [];
+    for await (const [name, handle] of currentHandle.entries()) {
+        contents.push({ name, kind: handle.kind });
+    }
+    
+    console.log(`Contents of ${dirPath}:`, contents);
+    return contents;
+}
+
+}
+const fs = new filesystem
+await fs.init()
+window.fs = fs
+</script>
 <script>
+async function syncOfflineData() {
+    if (navigator.onLine) {
+        const queue = JSON.parse(localStorage.getItem('fetchqueue') || "[]");
+        if (queue.length === 0) return;
+
+        console.log(`Syncing ${queue.length} offline results...`);
+        
+        for (let i = 0; i < queue.length; i++) {
+            const item = queue[i];
+            try {
+                await fetch(item.target, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(item.body)
+                });
+            } catch (err) {
+                console.error("Sync failed for item, keeping in queue.");
+                return; // Stop and try again next time if server is still down
+            }
+        }
+        
+        localStorage.removeItem('fetchqueue');
+    }
+}
+async function saveset(title){
+    const usernameres = await fetch('/api/getusername')
+    const username = await usernameres.text()
+    const res = await fetch(`/api/allcards?user=${username}&title=${title}`)
+    const json = await res.json()
+    const jsonstring = JSON.stringify(json)
+    window.fs.write(`${title}.txt`, jsonstring)
+    alert('Saved set!')
+}
+async function checkoffline() {
+    let isOnline = false;
+    // 1. Try to check network status
+    try {
+        const res = await fetch('/login');
+        if (res.ok) {
+            isOnline = true;
+            syncOfflineData()
+        }
+    } catch (e) {
+        // Fetch failed, we are definitely offline
+        console.log("Network unreachable, checking local cache...");
+        isOnline = false;
+        alert("You appear to be offline, you can still study and use sets you saved. Just note that some features are unavailable")
+    }
+
+    // 2. If we are offline, load local cards
+    if (!isOnline) {
+        clearCards();
+        try {
+            const files = await window.fs.ls('/');
+            console.log(files)
+            for (let i = 0; i < files.length; i++) {
+                if (files[i].kind === 'file' && files[i].name.includes('.txt')) {
+                    const data = await window.fs.read(files[i].name);
+                    const json = JSON.parse(data);
+                    json.forEach(obj => {
+                        createcard(obj.Title, obj.cards, obj.description)
+                    })
+                }
+            }
+        } catch (e) {
+            console.log('No offline cards found or filesystem error');
+        }
+    }
+}
 setTimeout(function(){
     udpatepubliccheckbox()
+    checkoffline()
 }, 1000)
 loadcards();
 fetch('/api/wrong').then(res => res.text()).then(data => document.getElementById('wrong-text').textContent = data)
@@ -63,25 +198,45 @@ fetch('/api/right').then(res => res.text()).then(data => document.getElementById
         });
     }
     async function createcard(Title, cards, desc) {
-        const fet = await fetch(`/api/getpercent?title=${encodeURIComponent(Title)}`)
+        let offline = false
+        let extrastyle = ''
+        let data;
+        let avg;
+        let bg;
+        let total = 0
+        let fet
+        try{
+            fet = await fetch(`/api/getpercent?title=${encodeURIComponent(Title)}`)
+        }
+        catch(e){
+            offline = true
+        }
+        if (offline === true){
+            extastyle = 'hidden'
+        }
+        if (!offline){
         data = await fet.json()
-        total = 0
         data.forEach(function(item){
             total += parseInt(item)
         })
         avg = total / data.length || 0
         const confidence = data.length / (data.length + 2);
         avg = (avg * confidence).toFixed(2);
-        bg = avg > 80 ? 'bg-green-500/20' : avg > 45 ? 'bg-yellow-500/20' : 'bg-red-500/20'      
+        bg = avg > 80 ? 'bg-green-500/20' : avg > 45 ? 'bg-yellow-500/20' : 'bg-red-500/20'    
+        } 
+        else{
+            avg = 0
+            bg = ''
+        }
         const div = document.createElement("div");
         div.setAttribute('title', avg > 80 ? `Your memory score is ${avg}` : avg > 45 ? `score: ${avg}, not bad needs improvment` : 'You really need to work on this');
-        div.className = "glass-panel rounded-lg m-10 p-6 hover:cursor-pointer h-full w-[20vw] grid grid-rows-[auto_1fr_auto]"
-        div.classList.add(bg)
+        div.className = `glass-panel rounded-lg m-10 p-6 hover:cursor-pointer h-full w-[20vw] grid grid-rows-[auto_1fr_auto] ${bg}`
         div.innerHTML = `
 <div id="menu-${Title}" popover class="fixed w-40 bg-slate-800 border border-white/10 rounded-md shadow-2xl z-[100] py-2">
     <div class="block w-full text-left px-4 py-2 hover:bg-white/10 text-sm"><input class="public-input" title="${Title}" type="checkbox" id="${Title}-check"><label for="${Title}-check">Public</label></div>
     <button class="block w-full text-left px-4 py-2 hover:bg-white/10 text-sm" onclick="editcard('${Title}')">Edit</button>
     <button class="block w-full text-left px-4 py-2 hover:bg-white/10 text-sm text-red-400" onclick="deleteset('${Title}')">Delete</button>
+    <button class="block w-full text-left px-4 py-2 hover:bg-white/10 text-sm text-white" onclick="saveset('${Title}')">Save set</button>
     </div>
 
 <div id="card-options" class="row-start-1 grid grid-cols-5 items-center">
@@ -108,9 +263,10 @@ onclick="
             <p class="text-white/70 text-xl">${cards} Cards</p>
             <br>
             <p class="text-white/70">${desc}</p>
-        </div class="row-start-3 row-end-3">
+            </div>
+        <div class="row-start-3 row-end-3 ${extrastyle}">
             <progress value="${avg}" title="your memorye score" max="100" class="w-full h-2 rounded-full overflow-hidden">
-        <div>
+        </div>
         `
         document.getElementById("cards").appendChild(div);
     }
@@ -148,5 +304,8 @@ function udpatepubliccheckbox() {
                 });
         });
     });
+}
+function clearCards(){
+    document.getElementById("cards").innerHTML = ''
 }
 </script>

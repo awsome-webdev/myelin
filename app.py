@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, redirect, stream_with_context, url_for, Response, stream_with_context, send_file
+from flask import Flask, request, jsonify, render_template, redirect, stream_with_context, url_for, Response, stream_with_context, send_file, send_from_directory, make_response
 import json
 import os
 import re
@@ -492,6 +492,19 @@ def getpercent():
             return jsonify([])
     except Exception as e:
         return jsonify([])
+@app.route('/sw/<name>')
+def sw(name):
+    response = make_response(send_from_directory('static', name))
+    
+
+    response.headers['Service-Worker-Allowed'] = '/'
+    
+    # CRITICAL: Prevent the browser from caching the SW itself
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    return response
+@app.route('/api/getusername')
+def getusername():
+    return current_user.username, 200
 @app.route('/allsets')
 @login_required
 def allsets():

@@ -84,6 +84,73 @@
             <button id="next-button" class="col-start-3 row-start-2 row-end-2 bg-white/10 p-5 backdrop-blur-md rounded-md ml-[5%]" onclick="if (currentmode !== 'test') { currentIndex++; showingFront = true; showCard(currentIndex); } else { showtestquestion(++currentQuestion); }">Next</button>
     </body> 
 </html>
+<script type="module">
+class filesystem{
+    constructor(){
+        this.root = null
+    }
+    async init(){
+        this.root = await navigator.storage.getDirectory()
+    }
+    async write(filename, data) {
+        try{
+            const file = await this.root.getFileHandle(filename, {create : true})
+            const write = await file.createWritable()
+            await write.write(data)
+            await write.close()
+            return true
+        }
+        catch{
+            return false
+        }
+    }
+async read(filename) {
+    if (!this.root) {
+        console.error("Filesystem not initialized!");
+        return null;
+    }
+    try {
+        const file = await this.root.getFileHandle(filename, { create: false });
+        const fileData = await file.getFile();
+        return await fileData.text();
+    } catch(e) {
+        console.error("Read error:", e);
+        return null;
+    }
+}
+    async delete(filename){
+        try{
+            await this.root.removeEntry(filename)
+        }
+        catch(e){
+            return e
+        }
+    }
+    async mkdir(directory){
+        const dir = await this.root.getDirectoryHandle(directory, {create : true})
+    }
+    async ls(dirPath) {
+    let currentHandle = this.root;
+    const folders = dirPath.split('/').filter(Boolean);
+    
+    for (const folder of folders) {
+        currentHandle = await currentHandle.getDirectoryHandle(folder, { create: false });
+    }
+
+    const contents = [];
+    for await (const [name, handle] of currentHandle.entries()) {
+        contents.push({ name, kind: handle.kind });
+    }
+    
+    console.log(`Contents of ${dirPath}:`, contents);
+    return contents;
+}
+
+}
+const fs = new filesystem
+await fs.init()
+window.fs = fs
+</script>
 <script>
 let block = false
 let wrongq = 0;
@@ -96,6 +163,7 @@ let showingFront = true;
 let cardSet = null;
 let test = [];
 let timerInterval = null;
+let offline = false
 const game = document.getElementById('gameframe').contentWindow
 const par = new URLSearchParams(window.location.search);
 const setname = decodeURIComponent(par.get("setname"));
@@ -109,9 +177,35 @@ const frontContent = document.getElementById('front-content');
 const backContent = document.getElementById('back-content');
 const cardContainer = document.getElementById('card-container');
 const cardImage = document.getElementById('img');
-
+if (typeof init === "function") {
+    init(setname); 
+}
 backDiv.style.display = 'none';
 let userStats = null;
+async function checkoffline() {
+    let isOnline = false;
+    
+    // 1. Try to check network status
+    try {
+        const res = await fetch('/login');
+        if (res.ok) {
+            isOnline = true;
+        }
+    } catch (e) {
+        // Fetch failed, we are definitely offline
+        console.log("Network unreachable, checking local cache...");
+        isOnline = false;
+    }
+    offline = !isOnline
+}
+async function init(setname){
+    await checkoffline()
+    if (offline){
+        setTimeout(function(){getcards(setname, offline=true)}, 1000)
+    }else {
+        getcards(setname);
+    }
+}
 function resetGame() {
     game.grid = Array(8).fill().map(() => Array(8).fill(null));
     game.score = 0;
@@ -201,11 +295,25 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-async function getcards(name) {
+async function getcards(name, offline=false) {
+    if (offline){
+        console.log('the name is', name)
+        const file = await window.fs.read(`${name}.txt`)
+        const json = await JSON.parse(file)
+        console.log('test json', json)
+        cardSet = json[0]
+        if (cardSet && cardSet.content && cardSet.content.length > 0) {
+            currentIndex = 0;
+            showingFront = true;
+            showCard(currentIndex);
+            await generatetest();
+        }
+    }
+    else{
     userStats = await fetchAndBuildJSON();
     
     if(!user || user === "null" || user === "undefined"){
-            await fetch(`/api/cards`)
+    await fetch(`/api/cards`)
     .then(response => response.json())
     .then(async(data) => {
         cardSet = data.find(c => c.Title === name);
@@ -230,6 +338,7 @@ async function getcards(name) {
         }
     });
     }
+}
 }
 function next(){
     if (currentmode !== 'test') { currentIndex++; showingFront = false; showCard(currentIndex); } else { showtestquestion(++currentQuestion); }
@@ -534,8 +643,6 @@ function startTimer(seconds, color) {
         }
     }, intervalRate);
 }
-
-getcards(setname);
 function truncateToDetails(text, lineLimit = 3) {
     if (text.startsWith('data:image') || text.startsWith('http')) return text;
     
@@ -582,34 +689,51 @@ function shuffletest() {
     progress.setAttribute('max', test.length);
     showtestquestion(0);
 }
+function queueFetch(target, payloadObject) {
+    let queue = [];
+    try {
+        const existing = localStorage.getItem('fetchqueue');
+        queue = existing ? JSON.parse(existing) : [];
+    } catch (e) {
+        queue = [];
+    }
+    queue.push({
+        target: target,
+        body: payloadObject,
+        timestamp: Date.now()
+    });
+
+    localStorage.setItem('fetchqueue', JSON.stringify(queue));
+}
 window.addEventListener('beforeunload', (event) => {
     let test2 = [];
     test.forEach(function(item) {
         if (item['userans'] !== '' && item['userans'] !== 're-queued') {
-            let data = {
+            test2.push({
                 setname: setname,
                 question: item.question.startsWith('data:') ? 'image' : item.question,
                 answer: item.answer.startsWith('data:') ? 'image' : item.answer, 
                 options: item.options.map(opt => opt.startsWith('data:') ? 'image' : opt),
                 userans: item.userans,
                 right: item.right
-            };
-            test2.push(data);
+            });
         }
     });
 
     if (test2.length > 0 || rightq > 0 || wrongq > 0) {
-        const payload = JSON.stringify({
+        const payloadObject = {
             setname: setname,
             right: rightq, 
             wrong: wrongq,
             test: test2,
-            ...(rightq > 1 && { percent: parseInt(((rightq / (rightq + wrongq)) * 100).toFixed(0))})
-        });
-        const success = navigator.sendBeacon('/api/savetest', new Blob([payload], { type: 'application/json' }));
-        
-        if (!success) {
-            console.error("Beacon failed: Data too large or browser rejected.");
+            ...(rightq > 1 && { percent: Math.round((rightq / (rightq + wrongq)) * 100) })
+        };
+
+        if (!offline) {
+            const blob = new Blob([JSON.stringify(payloadObject)], { type: 'application/json' });
+            navigator.sendBeacon('/api/savetest', blob);
+        } else {
+            queueFetch('/api/savetest', payloadObject);
         }
     }
 });

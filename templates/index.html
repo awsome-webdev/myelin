@@ -29,7 +29,9 @@
             <p class="text-3xl max-[1300px]:text-xl hover:cursor-pointer" onclick="setframe('allsets')">Global Sets</p>
             <a href="/logout" class="text-white text-md mt-10">Logout</a>
         </div>
-        <iframe src="/dash" class="absolute top-0 right-0 h-[100vh] w-[85vw] border-none">
+        <iframe src="/dash" class="absolute top-0 right-0 h-[100vh] w-[85vw] border-none" allow="storage-access"
+    allow-scripts 
+    allow-same-origin>
 
         </iframe>
     </body>
@@ -38,4 +40,15 @@
     function setframe(page) {
         document.querySelector("iframe").src = `/${page}`;
     }
+    if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw/index.js', { scope: '/' })
+      .then(registration => {
+        console.log('SW registered with scope:', registration.scope);
+      })
+      .catch(err => {
+        console.error('SW registration failed:', err);
+      });
+  });
+}
 </script>

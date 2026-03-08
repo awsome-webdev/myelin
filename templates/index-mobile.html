@@ -21,7 +21,10 @@
             id="content-frame"
             src="/dash" 
             title="Quiz Content"
-            class="w-full h-full">
+            class="w-full h-full"
+            allow="storage-access"
+            allow-scripts 
+            allow-same-origin>
         </iframe>
     </main>
 
@@ -64,6 +67,17 @@
             const frame = document.getElementById('content-frame');
             frame.src = `/${page}`;
         }
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw/index.js', { scope: '/' })
+      .then(registration => {
+        console.log('SW registered with scope:', registration.scope);
+      })
+      .catch(err => {
+        console.error('SW registration failed:', err);
+      });
+  });
+}
     </script>
 </body>
 </html>
