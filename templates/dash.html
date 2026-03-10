@@ -88,7 +88,6 @@ class filesystem{
         contents.push({ name, kind: handle.kind });
     }
     
-    console.log(`Contents of ${dirPath}:`, contents);
     return contents;
 }
 
@@ -156,14 +155,19 @@ async function checkoffline() {
             for (let i = 0; i < files.length; i++) {
                 if (files[i].kind === 'file' && files[i].name.includes('.txt')) {
                     const data = await window.fs.read(files[i].name);
+                    console.log('raw data:', data)
                     const json = JSON.parse(data);
-                    json.forEach(obj => {
-                        createcard(obj.Title, obj.cards, obj.description)
-                    })
+                    console.log('Json:', json)
+                    try{
+                        createcard(json[0].Title, json[0].cards, json[0].description)
+                    }
+                    catch {
+                        createcard(json.Title, json.cards, json.description)
+                    }
                 }
             }
         } catch (e) {
-            console.log('No offline cards found or filesystem error');
+            console.log('No offline cards found or filesystem error:' , e);
         }
     }
 }

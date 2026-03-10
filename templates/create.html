@@ -86,7 +86,71 @@
             </div>
         </div>
     </div>
+<script type="module">
+class filesystem{
+    constructor(){
+        this.root = null
+    }
+    async init(){
+        this.root = await navigator.storage.getDirectory()
+    }
+    async write(filename, data) {
+        try{
+            const file = await this.root.getFileHandle(filename, {create : true})
+            const write = await file.createWritable()
+            await write.write(data)
+            await write.close()
+            return true
+        }
+        catch{
+            return false
+        }
+    }
+    async read(filename){
+        try{
+        const file = await this.root.getFileHandle(filename, {create : true})
+        const read = await file.getFile()
+        const content = await read.text()
+        return content
+        }
+        catch(e){
+            return e
+        }
 
+    }
+    async delete(filename){
+        try{
+            await this.root.removeEntry(filename)
+        }
+        catch(e){
+            return e
+        }
+    }
+    async mkdir(directory){
+        const dir = await this.root.getDirectoryHandle(directory, {create : true})
+    }
+    async ls(dirPath) {
+    let currentHandle = this.root;
+    const folders = dirPath.split('/').filter(Boolean);
+    
+    for (const folder of folders) {
+        currentHandle = await currentHandle.getDirectoryHandle(folder, { create: false });
+    }
+
+    const contents = [];
+    for await (const [name, handle] of currentHandle.entries()) {
+        contents.push({ name, kind: handle.kind });
+    }
+    
+    console.log(`Contents of ${dirPath}:`, contents);
+    return contents;
+}
+
+}
+const fs = new filesystem
+await fs.init()
+window.fs = fs
+</script>
     <script>
 setInterval(function(){
 const uploadDiv = document.getElementById('upload');
@@ -308,7 +372,7 @@ aiDiv.style.top = offset + 'px';
                 "content": cards,
                 "description": description
             };
-
+            saveopfs(deckData)
             console.log("Saving Deck with Images:", deckData);
             
             const btn = document.getElementById('saveDeckBtn');
@@ -377,6 +441,18 @@ aiDiv.style.top = offset + 'px';
 
             console.log("Saving Deck with Images:", deckData);
             return JSON.stringify(deckData.content)
+    }
+    async function saveopfs(deck){
+        const files = await window.fs.ls('/')
+        for (let i=0; i < files.length; i++){
+            const file = files[i]
+            const fileNameNoExt = file.name.replace('.txt', '')
+            if (fileNameNoExt === deck.Title) {
+                console.log('found saved file:', file.name)
+                await window.fs.delete(file.name)
+                await window.fs.write(file.name, JSON.stringify(deck))
+            }
+        }
     }
     </script>
 </body>

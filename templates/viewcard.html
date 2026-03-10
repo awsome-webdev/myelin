@@ -301,7 +301,7 @@ async function getcards(name, offline=false) {
         const file = await window.fs.read(`${name}.txt`)
         const json = await JSON.parse(file)
         console.log('test json', json)
-        cardSet = json[0]
+        cardSet = json?.[0] ?? json;
         if (cardSet && cardSet.content && cardSet.content.length > 0) {
             currentIndex = 0;
             showingFront = true;
