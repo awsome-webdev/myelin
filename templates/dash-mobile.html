@@ -139,13 +139,16 @@ async function checkoffline() {
                 if (files[i].kind === 'file' && files[i].name.includes('.txt')) {
                     const data = await window.fs.read(files[i].name);
                     const json = JSON.parse(data);
-                    json.forEach(obj => {
-                        createcard(obj.Title, obj.cards, obj.description)
-                    })
+                    try{
+                        createcard(json[0].Title, json[0].cards, json[0].description)
+                    }
+                    catch {
+                        createcard(json.Title, json.cards, json.description)
+                    }
                 }
             }
         } catch (e) {
-            console.log('No offline cards found or filesystem error');
+            console.log('No offline cards found or filesystem error:', e);
         }
     }
 }
