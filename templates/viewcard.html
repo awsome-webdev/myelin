@@ -2,36 +2,36 @@
     <head>
         <title>Quiz Cards</title>
         <script src="https://cdn.tailwindcss.com"></script>
-<script type="module">
-    import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
-    window.pipeline = pipeline;
-    env.allowLocalModels = false;
-    // Dispatch a custom event so the rest of the app knows we are ready
-    window.dispatchEvent(new Event('transformersReady'));
-</script>
+        <script type="module">
+            import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+            window.pipeline = pipeline;
+            env.allowLocalModels = false;
+            // Dispatch a custom event so the rest of the app knows we are ready
+            window.dispatchEvent(new Event('transformersReady'));
+        </script>
     </head>
-    <body class="grid place-items-center grid-cols-3 grid-rows-3 bg-gray-900 text-white">
-    <div id="study-option" class="w-[60vw] flex justify-center items-center gap-4 mb-10 col-start-2 col-end-2 row-start-1 row-end-1">
-    
-    <button id="blockBtn" class="bg-white/10 p-5 backdrop-blur-md rounded-md max-[1300px]:p-3" onclick="switchmode('block')">Block Mode</button>
-    <button class="bg-white/10 p-5 backdrop-blur-md rounded-md max-[1300px]:text-sm max-[1300px]:p-3" onclick="switchmode('card')">Study Mode</button>
-    <button class="bg-white/10 p-5 backdrop-blur-md rounded-md max-[1300px]:text-sm max-[1300px]:p-3" onclick="switchmode('test')">Test Mode</button>
-    <button class="bg-white/10 p-5 backdrop-blur-md rounded-md max-[1300px]:text-sm max-[1300px]:p-3" onclick="shuffletest()">Shuffle Test</button>
-    
-    <div class="flex items-center bg-white/10 p-5 backdrop-blur-md rounded-md max-[1300px]:text-sm max-[1300px]:p-4">
-        <input type="checkbox" id="shuffle-checkbox" class="m-0">
-        <label for="shuffle-checkbox" class="ml-2 leading-none">Shuffle Cards</label>
-    </div>
+    <body class="grid place-items-center grid-cols-3 grid-rows-[40vh_35vh_25vh] min-h-screen bg-gray-900 text-white">
+        
+        <div id="study-option" class="w-[60vw] flex justify-center items-center gap-4 mb-10 col-start-2 row-start-1">
+            <button id="blockBtn" class="bg-white/10 p-5 backdrop-blur-md rounded-md max-[1300px]:p-3" onclick="switchmode('block')">Block Mode</button>
+            <button class="bg-white/10 p-5 backdrop-blur-md rounded-md max-[1300px]:text-sm max-[1300px]:p-3" onclick="switchmode('card')">Study Mode</button>
+            <button class="bg-white/10 p-5 backdrop-blur-md rounded-md max-[1300px]:text-sm max-[1300px]:p-3" onclick="switchmode('test')">Test Mode</button>
+            <button class="bg-white/10 p-5 backdrop-blur-md rounded-md max-[1300px]:text-sm max-[1300px]:p-3" onclick="shuffletest()">Shuffle Test</button>
+            
+            <div class="flex items-center bg-white/10 p-5 backdrop-blur-md rounded-md max-[1300px]:text-sm max-[1300px]:p-4">
+                <input type="checkbox" id="shuffle-checkbox" class="m-0">
+                <label for="shuffle-checkbox" class="ml-2 leading-none">Shuffle Cards</label>
+            </div>
+        </div>
 
-    </div>
-            <button id="prev-button" class="col-start-1 row-start-2 row-end-2 bg-white/10 p-5 backdrop-blur-md rounded-md mr-[5%]" onclick="if (currentmode !== 'test') { currentIndex--; showingFront = true; showCard(currentIndex); } else { showtestquestion(--currentQuestion); }">Prev</button>
-            <div id="test" class="relative bg-white/10 rounded-lg border border-white/30 m-10 h-[60vh] w-[60vw] col-start-2 col-end-2 row-start-2 row-end-2">
-                <div id="timer" class="pointer-events-none absolute z-10 left-[0px] top-[0px] w-[0%] h-[100%] bg-green-500/10"></div>
-                <div class="w-full top-[0px] left-[0px] max-h-[100%] p-6 overflow-y-scroll">
+        <button id="prev-button" class="col-start-1 row-start-2 bg-white/10 p-5 backdrop-blur-md rounded-md mr-[5%]" onclick="if (currentmode !== 'test') { currentIndex--; showingFront = true; showCard(currentIndex); } else { showtestquestion(--currentQuestion); }">Prev</button>
+        
+        <div id="test" class="relative bg-white/10 rounded-lg border border-white/30 m-10 h-[60vh] w-[60vw] col-start-2 row-start-2">
+            <div id="timer" class="pointer-events-none absolute z-10 left-[0px] top-[0px] w-[0%] h-[100%] bg-green-500/10"></div>
+            <div class="w-full top-[0px] left-[0px] max-h-[100%] p-6 overflow-y-scroll">
                 <progress value="50" max="100" class="top-0px w-full mb-5" id="test-p"></progress>
                 <h1 id="q" class="text-4xl">Question</h1>
                 <div id="options" class="relative grid grid-cols-2 auto-rows-auto gap-4 mt-6 w-[100%] min-h-[30%] max-h-[70%]">
-                    <!-- Options will be populated here -->
                     <div class="bg-white/20 rounded-lg border border-white/30 flex items-center justify-center hover:cursor-pointer">
                         <p>Question1</p>
                     </div>
@@ -45,43 +45,42 @@
                         <p>Question4</p>
                     </div>
                 </div>
-                </div>
             </div>
-            <div id="blockframe" style="display: none;" class="relative bg-white/10 rounded-lg border border-white/30 m-10 h-[60vh] w-[60vw] col-start-2 col-end-2 row-start-2 row-end-2">
-                <iframe src="/blockblast" id="gameframe" class="w-full h-full">
+        </div>
 
-                </iframe>
-            </div>
-            <div id="counter" class="absolute right-[2vw] top-1/2 -translate-y-1/2 flex flex-col justify-center gap-8 bg-white/10 backdrop-blur-md rounded-lg border border-white/30 p-8 h-[50vh] w-[12vw] z-20">
-                <div class="text-center mt-[5%]">
-                    <p class="text-sm uppercase tracking-widest opacity-60">Wrong</p>
-                    <p id="wrong" class="text-5xl font-bold text-red-500">0</p>
-                </div>
+        <div id="blockframe" style="display: none;" class="relative bg-white/10 rounded-lg border border-white/30 m-10 h-[60vh] w-[60vw] col-start-2 row-start-2">
+            <iframe src="/blockblast" id="gameframe" class="w-full h-full"></iframe>
+        </div>
 
-                <hr class="border borer-white w-[98%] mx-auto my-5">
-            
-                <div class="text-center mt-[5%]">
-                    <p class="text-sm uppercase tracking-widest opacity-60">Right</p>
-                    <p id="right" class="text-5xl font-bold text-green-500">0</p>
-                </div>
+        <div id="counter" class="absolute right-[2vw] top-[30%] flex flex-col justify-center gap-8 bg-white/10 backdrop-blur-md rounded-lg border border-white/30 p-8 h-[50vh] w-[12vw] z-20">
+            <div class="text-center mt-[5%]">
+                <p class="text-sm uppercase tracking-widest opacity-60">Wrong</p>
+                <p id="wrong" class="text-5xl font-bold text-red-500">0</p>
             </div>
-            <div class="bg-white/10 rounded-lg border border-white/30 m-10 p-6 hover:cursor-pointer h-[60vh] w-[60vw] col-start-2 col-end-2 row-start-2" id="card-container">
-                <div id="front">
-                <center class="w-[100%] h-[100%]">
-                <p id="front-content" class="text-2xl"></p>
-                <img id="img" src="" alt="" class="max-h-[70%] max-w-[70%] mt-4">
-                </center>
+
+            <hr class="border border-white w-[98%] mx-auto my-5">
+        
+            <div class="text-center mt-[5%]">
+                <p class="text-sm uppercase tracking-widest opacity-60">Right</p>
+                <p id="right" class="text-5xl font-bold text-green-500">0</p>
+            </div>
+        </div>
+
+        <div class="relative bg-white/10 rounded-lg border border-white/30 m-10 p-6 hover:cursor-pointer h-[60vh] w-[60vw] col-start-2 row-start-2" id="card-container">
+            <div id="front">
+                <div class="w-[100%] h-[100%]">
+                    <p id="front-content" class="text-2xl text-center"></p>
+                    <img id="img" src="" alt="" class="max-h-[70%] max-w-[70%] mt-4 mx-auto">
+                </div>
             </div>
             <div id="back">
-                <center>
-                <p id="back-content" class="text-2xl"></p>
-                </center>
+                <p id="back-content" class="text-2xl text-center"></p>
             </div>
-            <center>
-            <p id="progress" class="absolute text-white text-2xl left-[45%] bottom-[25%]"></p>
-            </center>
-            </div>
-            <button id="next-button" class="col-start-3 row-start-2 row-end-2 bg-white/10 p-5 backdrop-blur-md rounded-md ml-[5%]" onclick="if (currentmode !== 'test') { currentIndex++; showingFront = true; showCard(currentIndex); } else { showtestquestion(++currentQuestion); }">Next</button>
+            <p id="progress" class="relative text-white text-2xl text-center bottom-[10%]"></p>
+        </div>
+
+        <button id="next-button" class="col-start-3 row-start-2 bg-white/10 p-5 backdrop-blur-md rounded-md ml-[5%]" onclick="if (currentmode !== 'test') { currentIndex++; showingFront = true; showCard(currentIndex); } else { showtestquestion(++currentQuestion); }">Next</button>
+        
     </body> 
 </html>
 <script type="module">
