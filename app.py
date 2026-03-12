@@ -810,7 +810,10 @@ def get_cards():
         target_content = next((item for item in cards if item["Title"] == cardset), None)
         return jsonify(target_content)
     if clear:
-        cards[0]['content'].clear()
+        try:
+            cards[0]['content'].clear()
+        except Exception as e:
+            return jsonify([])
     return jsonify(cards)
 
 @app.route("/register", methods=["GET", "POST"])
