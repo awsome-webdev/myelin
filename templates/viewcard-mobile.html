@@ -561,65 +561,56 @@ const workerCode = `
             });
         }
 
-        function check(ele){
-            if(document.getElementById('test').classList.contains('pointer-events-none')) return;
+function check(ele) {
+    const testContainer = document.getElementById('test');
+    if (testContainer.classList.contains('pointer-events-none')) return;
 
-            const allOptions = document.getElementById('options').children;
-            for (let child of allOptions) {
-                child.classList.remove('border-green-500', 'border-red-500', 'bg-green-500/20', 'bg-red-500/20');
-                child.classList.add('border-white/30');
-            }
+    const allOptions = document.getElementById('options').children;
+    let selected = ele.dataset.val;
+    let answerq = test[currentQuestion].answer;
 
-            let selected = ele.getAttribute('data-val');
-            let answerq = test[currentQuestion].answer;
+    // Reset styles
+    for (let child of allOptions) {
+        child.classList.remove('border-green-500', 'border-red-500', 'bg-green-500/20', 'bg-red-500/20');
+        child.classList.add('border-white/30');
+    }
 
-            const testContainer = document.getElementById('test');
+    if (selected === answerq) {
+        ele.classList.add('border-green-500', 'bg-green-500/20');
+        testContainer.classList.add('bg-green-500/10', 'border-green-500/20');
+        
+        test[currentQuestion].right++;
+        test[currentQuestion].userans = 'r';
+        rightq++;
 
-            if (selected === answerq) {
-                ele.classList.remove('border-white/30');
-                ele.classList.add('border-green-500', 'bg-green-500/20');
-                
-                testContainer.classList.remove('bg-white/10', 'border-white/30');
-                testContainer.classList.add('bg-green-500/10', 'border-green-500/20');
-                
-                // Find and highlight correct answer (visual reinforcement)
-                const right = document.querySelector(`div[data-val="${answerq.replace(/"/g, '&quot;')}"]`);
-                if(right) {
-                    right.classList.remove('bg-white/10', 'border-white/30');
-                    right.classList.add('bg-green-500/30', 'border-green-500/20');
-                }
-
-                startTimer(2, 'green');
-                test[currentQuestion].right++;
-                test[currentQuestion].userans = 'r';
-                rightq++;
-                
-                if (block){
-                    switchmode('block');
-                    document.getElementById('blockBtn').style.opacity = '1';
-                    document.getElementById('blockBtn').style.pointerEvents = 'auto';
-                }
-            } else {
-                testContainer.classList.remove('border-white/30', 'bg-white/10');
-                testContainer.classList.add('border-red-500/20', 'bg-red-500/10');
-                
-                ele.classList.remove('border-white/30');
-                ele.classList.add('border-red-500', 'bg-red-500/20');
-                
-                const right = document.querySelector(`div[data-val="${answerq.replace(/"/g, '&quot;')}"]`);
-                if(right){
-                    right.classList.remove('bg-white/10', 'border-white/30');
-                    right.classList.add('bg-green-500/30', 'border-green-500/20');
-                }
-
-                test[currentQuestion].right--;
-                test[currentQuestion].userans = 'w';
-                shufflehardtoclose(currentQuestion);
-                startTimer(2, 'red');
-                wrongq++;
-            }
-            updatecount();
+        if (block) {
+            // Delay the switch slightly so the user sees the green "Correct" state
+            setTimeout(() => {
+                switchmode('block');
+                document.getElementById('blockBtn').style.opacity = '1';
+                document.getElementById('blockBtn').style.pointerEvents = 'auto';
+            }, 500);
         }
+        startTimer(2, 'green');
+    } else {
+        ele.classList.add('border-red-500', 'bg-red-500/20');
+        testContainer.classList.add('bg-red-500/10', 'border-red-500/20');
+
+        // Find the correct answer safely by looping
+        for (let child of allOptions) {
+            if (child.dataset.val === answerq) {
+                child.classList.add('bg-green-500/30', 'border-green-500/20');
+            }
+        }
+
+        test[currentQuestion].right--;
+        test[currentQuestion].userans = 'w';
+        wrongq++;
+        shufflehardtoclose(currentQuestion);
+        startTimer(2, 'red');
+    }
+    updatecount();
+}
 
         function startTimer(seconds, color) {
             clearInterval(timerInterval);
@@ -637,7 +628,7 @@ const workerCode = `
             timerInterval = setInterval(() => {
                 timeLeft -= intervalRate;
                 const percentage = (timeLeft / totalTime) * 100;
-                //timerBar.style.width = `${percentage}%`;
+                timerBar.style.width = `${percentage}%`;
 
                 if (timeLeft <= 0) {
                     clearInterval(timerInterval);

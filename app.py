@@ -715,11 +715,14 @@ def set_public():
 @login_required
 def home():
     user_agent = request.headers.get('User-Agent').lower()
-    mobile_keywords = ['mobile', 'android', 'iphone', 'ipad', 'phone']
-    is_mobile = any(keyword in user_agent for keyword in mobile_keywords)
-    if is_mobile:
-        return render_template('index-mobile.html')
-    return render_template('index.html')
+    is_mobile = any(keyword in user_agent for keyword in ['mobile', 'android', 'iphone', 'ipad', 'phone'])
+    
+    template = 'index-mobile.html' if is_mobile else 'index.html'
+    response = make_response(render_template(template))
+    
+    # This tells the Service Worker: "The content of this URL changes based on the User-Agent"
+    response.headers['Vary'] = 'User-Agent'
+    return response
 
 @app.route('/leaderboard')
 @login_required
