@@ -710,7 +710,16 @@ def set_public():
     else:
         return 'Card not found', 404
 # -----------------------------
-
+@app.route('/api/explain')
+@login_required
+def explain():
+    answer = request.args.get('selected')
+    question = request.args.get('question')
+    if not answer or not question:
+        return jsonify({"error": "Missing 'selected' or 'question' parameter"}), 400
+    prompt = f"Explain why the answer '{answer}' is correct for the question: {question}, DO NOT use mark down and use html instead to format your answers"
+    explanation = ask(prompt)
+    return jsonify({"explanation": explanation}), 200
 @app.route('/')
 @login_required
 def home():

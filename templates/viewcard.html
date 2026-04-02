@@ -9,6 +9,82 @@
             // Dispatch a custom event so the rest of the app knows we are ready
             window.dispatchEvent(new Event('transformersReady'));
         </script>
+        <style>
+@keyframes expandani {
+    from {
+        width: 15vw;
+        height: 50vh;
+        top: 30%;
+        left: 2vw;
+        transform: translate(0, 0);
+    }
+    to {
+        width: 50vw;
+        height: 50vh;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+    }
+}
+/* Target only the AI expansion box */
+#ai-exp::-webkit-scrollbar {
+    width: 8px;
+}
+
+#ai-exp::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05); /* Very faint white */
+    border-radius: 10px;
+}
+
+#ai-exp::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2); /* Matches your border/button style */
+    border-radius: 10px;
+    border: 2px solid transparent; /* Creates a little padding effect */
+    background-clip: content-box;
+}
+
+#ai-exp::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.4); /* Brightens on hover */
+    background-clip: content-box;
+}
+
+/* For Firefox support */
+#ai-exp {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
+}
+@keyframes collapseani {
+    from {
+        width: 50vw;
+        height: 50vh;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+    }
+    to {
+        width: 15vw;
+        height: 50vh;
+        top: 30%;
+        left: 2vw;
+        transform: translate(0, 0);
+    }
+}
+
+/* Ensure the base state is visible */
+#ai-exp {
+    opacity: 1 !important;
+    visibility: visible !important;
+    z-index: 50; /* Ensure it's above the test card */
+}
+
+.expand {
+    animation: expandani 0.3s ease-out forwards;
+}
+
+.collapse {
+    animation: collapseani 0.3s ease-out forwards;
+}
+        </style>
     </head>
     <body class="grid place-items-center grid-cols-3 grid-rows-[40vh_35vh_25vh] min-h-screen bg-gray-900 text-white">
         
@@ -63,6 +139,15 @@
             <div class="text-center mt-[5%]">
                 <p class="text-sm uppercase tracking-widest opacity-60">Right</p>
                 <p id="right" class="text-5xl font-bold text-green-500">0</p>
+            </div>
+        </div>
+        <div id="ai-exp" class="absolute grid grid-rows-[auto_1fr] left-[2vw] top-[30%] gap-8 bg-white/10 backdrop-blur-md rounded-lg border border-white/30 p-8 h-[50vh] w-[15vw] z-20 overflow-y-scroll">
+            <div class="">
+                <p class="text-center text-white">AI explanation</p><br>
+                <button id="expand-ai" onclick="expandAI()" class="bg-white/10 p-2 backdrop-blur-md rounded-md max-[1300px]:p-1">Expand</button>
+            </div>
+            <div id="ai-exp-content">
+                
             </div>
         </div>
 
@@ -345,7 +430,7 @@ function next(){
     if (currentmode !== 'test') { currentIndex++; showingFront = false; showCard(currentIndex); } else { showtestquestion(++currentQuestion); }
 }
 function switchmode(mode) {
-    const testElements = ['test', 'counter'];
+    const testElements = ['test', 'counter', 'ai-exp'];
     const cardElements = ['card-container', 'prev-button', 'next-button'];
     const blockElements = ['blockframe'];
     if (mode === 'test') {
@@ -355,6 +440,7 @@ function switchmode(mode) {
         // Hide others
         cardElements.forEach(id => document.getElementById(id).style.display = 'none');
         blockElements.forEach(id => document.getElementById(id).style.display = 'none');
+        document.getElementById('ai-exp').style.display = 'grid'
     }
     
     else if (mode === 'block') {
@@ -536,7 +622,6 @@ function check(ele){
 
     let selected = ele.getAttribute('data-val');
     let answerq = test[currentQuestion].answer;
-
     if (selected === answerq) {
         ele.classList.remove('border-white/30');
         ele.classList.add('border-green-500', 'bg-green-500/20');
@@ -559,6 +644,7 @@ function check(ele){
             document.getElementById('blockBtn').style.pointerEvents = 'auto'
         }
     } else {
+        explainAI(answerq, selected)
         const ele2 = document.getElementById('test')
         ele2.classList.remove('border-white/30')
         ele2.classList.add('border-red-500/20')
@@ -738,4 +824,37 @@ window.addEventListener('beforeunload', (event) => {
         }
     }
 });
+function explainAI(answer, question){
+    const expDiv = document.getElementById('ai-exp-content');
+    expDiv.innerHTML = "<p class='text-center text-white'>Generating AI explanation...</p>";
+    fetch(`/api/explain?question=${encodeURIComponent(question)}&answer=${encodeURIComponent(answer)}&selected=${encodeURIComponent(answer)}`)
+    .then(response => response.json())
+    .then(data => {
+        expDiv.innerHTML = `<p class="text-sm uppercase tracking-widest opacity-60">AI Explanation</p><p>${data.explanation}</p>`;
+    })
+    .catch(err => {
+        expDiv.innerHTML = "<p class='text-center text-red-500'>Failed to get AI explanation.</p>";
+        console.error(err);
+    });
+}
+function expandAI() {
+    const expDiv = document.getElementById('ai-exp');
+    const isExpanded = expDiv.getAttribute('expanded') === 'true';
+
+    if (isExpanded) {
+        // Collapsing
+        expDiv.classList.remove('expand');
+        void expDiv.offsetWidth; // Trigger a reflow to restart animation
+        expDiv.classList.add('collapse');
+        expDiv.setAttribute('expanded', 'false');
+        document.getElementById('expand-ai').innerText = 'Expand';
+    } else {
+        // Expanding
+        expDiv.classList.remove('collapse');
+        void expDiv.offsetWidth; // Trigger a reflow
+        expDiv.classList.add('expand');
+        expDiv.setAttribute('expanded', 'true');
+        document.getElementById('expand-ai').innerText = 'Collapse';
+    }
+}
 </script>
