@@ -376,12 +376,16 @@ def createai():
 
                 # --- REGEX PARSING FOR FUNCTIONS ---
                 # re.DOTALL ensures .* matches across multiple lines (crucial for JSON arrays)
+                # --- REGEX PARSING FOR FUNCTIONS ---
                 exit_match = re.search(r'exit\((.*)\)', ai_response, re.DOTALL)
                 search_match = re.search(r'search\([\'"](.*?)[\'"]\)', ai_response)
                 fetch_match = re.search(r'fetch\([\'"](.*?)[\'"]\)', ai_response)
                 respond_match = re.search(r'respond\([\'"](.*?)[\'"]\)', ai_response)
-                if not respond_match.group(1).strip():
-                    respond_match = 'Thinking...'
+
+                # Safely extract the status message
+                status_message = 'Thinking...'
+                if respond_match and respond_match.group(1).strip():
+                    status_message = respond_match.group(1).strip()
                 # OPTION 1: EXIT (Success)
                 if exit_match:
                     raw_json = exit_match.group(1).strip()
