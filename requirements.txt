@@ -3,3 +3,4 @@ Flask-Login
 Werkzeug
 requests
 PyMuPDF
+openrouter
