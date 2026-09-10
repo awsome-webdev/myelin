@@ -630,7 +630,7 @@ function check(ele){
         ele2.classList.add('bg-green-500/10')
         ele2.classList.remove('border-white/30')
         ele2.classList.add('border-green-500/20')
-        const right = document.querySelector('div[data-val="'+ answerq +'"]')
+        const right = Array.from(document.querySelectorAll('[data-val]')).find(el => el.getAttribute('data-val') === answerq);
         right.classList.remove('bg-white/10')
         right.classList.add('bg-green-500/30')
         right.classList.remove('border-white/30')
