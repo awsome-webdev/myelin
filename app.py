@@ -371,7 +371,6 @@ def savenote():
         if x['id'] == noteid:
             x['note'] = note
     write_json(json, f"/user_data/{current_user.id}/notes.json")
-    print(f'SAVED!!: {note}', flush=True)
     return 'Saved', 200
 
 
