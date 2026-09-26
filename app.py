@@ -232,6 +232,10 @@ class User(UserMixin):
         self.username = username
         self.password_hash = password_hash
 
+def write_json(data, path):
+    full_path = f'{root}/{path}'
+    with open(full_path, 'w') as f:
+        json.dump(data, f, indent=4)
 def readjson(file):
     path = f'{root}{file}'
     if os.path.exists(path):
@@ -313,6 +317,82 @@ def search(query, type="web"):
         return data.get('news', {}).get('results', [])
     else:
         return None
+@app.route('/edit')
+@login_required
+def edit_note():
+    return render_template('edit_note.html')
+@app.route('/api/delete')
+@login_required
+def delete_note():
+    noteid = request.args.get('id')
+    json = readjson(f'/user_data/{current_user.id}/notes.json')
+    count = 0
+    for x in json:
+        if x['id'] == noteid:
+            json.pop(count)
+            write_json(json, f'/user_data/{current_user.id}/notes.json')
+            return redirect(url_for('notes'))
+        count += 1
+@app.route('/api/createnote')
+@login_required
+def create_note():
+    data = readjson(f'/user_data/{current_user.id}/notes.json')
+    title = request.args.get('title')
+    noteid = str(uuid.uuid4())
+    newnote = {
+        "id" : noteid,
+        "title" : title,
+        "note" : ""
+    }
+    data.append(newnote)
+    write_json(data, f'/user_data/{current_user.id}/notes.json')
+    return noteid
+@app.route('/api/notes/<id>')
+@login_required
+def sendnote(id):
+    data = readjson(f'/user_data/{current_user.id}/notes.json')
+    obj = ''
+    for x in data:
+        if x['id'] == id:
+            obj = x
+            return x
+    write_json(data, f'/user_data/{current_user.id}/notes.json')
+    return jsonify(obj)
+@app.route('/api/save-note', methods=["POST"])
+@login_required
+def savenote():
+    data = request.get_json()
+    note = data.get('body')
+    noteid = request.args.get('id')
+    json = readjson(f'/user_data/{current_user.id}/notes.json')
+    count = 0
+    for x in json:
+        count += 1
+        if x['id'] == noteid:
+            x['note'] = note
+    write_json(json, f"/user_data/{current_user.id}/notes.json")
+    print(f'SAVED!!: {note}', flush=True)
+    return 'Saved', 200
+
+
+@app.route('/api/notes')
+@login_required
+def get_notes():
+    user_dir = f'{root}user_data/{current_user.id}'
+    file_path = os.path.join(user_dir, 'notes.json')
+    # Ensure the directory exists
+    os.makedirs(user_dir, exist_ok=True)
+
+    # Create the file with default content if missing
+    if not os.path.exists(file_path):
+        write_json([], f'/user_data/{current_user.id}/notes.json')
+
+    # Serve the file
+    return send_from_directory(user_dir, 'notes.json')
+
+@app.route('/notes')
+def notes():
+    return render_template('notes.html')
 
 @app.route('/favicon')
 def favicon():

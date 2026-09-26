@@ -27,9 +27,13 @@
             <p class="text-3xl max-[1300px]:text-xl hover:cursor-pointer" onclick="setframe('leaderboard')">Leaderboard</p>
 
             <p class="text-3xl max-[1300px]:text-xl hover:cursor-pointer" onclick="setframe('allsets')">Global Sets</p>
+            <p class="text-3xl max-[1300px]:text-xl hover:cursor-pointer" onclick="setframe('notes')">Notes</p>
             <a href="/logout" class="text-white text-md mt-10">Logout</a>
         </div>
-        <iframe src="/dash" class="absolute top-0 right-0 h-[100vh] w-[85vw] border-none" allow="storage-access"
+        <iframe src="/dash" class="absolute top-0 right-0 h-[100vh] w-[85vw] border-none"
+  sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+  allow="picture-in-picture"
+>
     allow-scripts 
     allow-same-origin>
 
@@ -37,6 +41,46 @@
     </body>
 </html>
 <script>
+window.addEventListener('message', async (event) => {
+  if (event.data && event.data.type === 'OPEN_PIP_POPOUT') {
+    const url = event.data.url;
+
+    try {
+      const pipWindow = await window.documentPictureInPicture.requestWindow({
+        width: 300,
+        height: 300,
+      });
+
+      // Look for the container, OR create it dynamically if it's missing!
+      let container = document.querySelector("#my-popout-content");
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'my-popout-content';
+      }
+      
+      // Now this will never be null and won't crash
+      container.innerHTML = `
+        <iframe 
+          src="${url}" 
+          allow="picture-in-picture"
+          style="position: fixed; top: 0; left: 0; border: none; height: 100vh; width: 100vw;">
+        </iframe>
+      `;
+
+      pipWindow.document.body.append(container);
+
+      // Cleanup when closed
+      pipWindow.addEventListener("pagehide", () => {
+        container.remove(); // Safely discard it since we make it dynamically
+      });
+
+    } catch (error) {
+      console.error("Failed to open Document PiP:", error);
+    }
+  }
+});
+
+
     function setframe(page) {
         document.querySelector("iframe").src = `/${page}`;
     }

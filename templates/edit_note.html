@@ -1,0 +1,120 @@
+<html>
+    <head>
+        <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+        <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link rel="icon" href="/favicon" type="image/x-icon">
+        <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; }
+        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        .glass-panel { background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .sidebar-link.active { background: rgba(16, 185, 129, 0.1); color: #34d399; border-right: 3px solid #34d399; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        input, select, textarea { background: rgba(0,0,0,0.2) !important; color: white !important; border-color: rgba(255,255,255,0.1) !important; }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: #34d399 !important; }
+        #popout{
+            z-index: 10;
+            position: fixed;
+            bottom: 5px;
+            right: 5px;
+            border-radius: 10%;
+            padding: 10px;
+        }
+        </style>
+    </head>
+    <body>
+        <div id="editor">
+            
+        </div>
+        <button id="popout" class="glass">popout</button>
+    </body>
+</html>
+<script>
+const currentUrl = new URL(window.location.href);
+const id = currentUrl.searchParams.get('id');
+const quill = new Quill('#editor', {
+  theme: 'snow',
+  modules: {
+    toolbar: [
+      [{ 'header': [1, 2, 3, false] }],
+      ['bold', 'italic', 'underline', 'strike'],
+      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+      ['link', 'image'],
+      ['clean']
+    ]
+  },
+  placeholder: 'Start writing...'
+});
+// Save changes automatically with a delay (debounce)
+let timeout = null;
+
+quill.on('text-change', (delta, oldDelta, source) => {
+  // Only trigger if the edit was made by the user
+  if (source === 'user') {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => {
+      save();
+    }, 1000); // Waits 1 second after the user stops typing
+  }
+});
+async function init(){
+    const note = await fetch(`/api/notes/${id}`)
+    const data = await note.json()
+    console.log(data)
+    quill.clipboard.dangerouslyPasteHTML(data.note)
+    const btn = document.getElementById('popout')
+    //btn.setAttribute('onclick', `openPopout("${id}")`)
+    if (checkpip()){
+        document.getElementById('popout').remove()
+    }
+}
+async function save(){
+    const htmlContent = quill.root.innerHTML;
+    await fetch(`/api/save-note?id=${id}`, {
+        method : "POST",
+        headers : {
+            'Content-Type' : 'application/json'
+        },
+        body : JSON.stringify({body : htmlContent})
+    })
+}
+async function openPopout(url) {
+  // Request a Picture-in-Picture window
+  const pipWindow = await documentPictureInPicture.requestWindow({
+    width: 300,
+    height: 300,
+  });
+
+  // Move or copy HTML nodes into the new window
+  const container = document.querySelector("#my-popout-content");
+  pipWindow.document.body.append(container);
+  container.innerHTML = `
+  <iframe style="postition: absolute; top: 0px; left: 0px; height: 100vh; width: 100vw;" src="${url}">
+    </iframe>
+  `
+}
+const popoutButton = document.querySelector('#popout');
+
+popoutButton.addEventListener('click', () => {
+  // Send a message up to the parent window
+  window.parent.postMessage({
+    type: 'OPEN_PIP_POPOUT',
+    url: window.location.href // Passes its own URL, or change this to any specific URL string
+  }, '*'); // Replace '*' with the parent's exact domain for production security
+});
+function checkpip() {
+  // Check if the current display mode is picture-in-picture
+  const isPip = window.matchMedia('(display-mode: picture-in-picture)').matches;
+  
+  if (isPip) {
+    console.log("I am inside a PiP window!");
+  } else {
+    console.log("I am in a normal browser tab.");
+  }
+  return isPip;
+}
+init()
+</script>
