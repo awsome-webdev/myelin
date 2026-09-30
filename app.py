@@ -4,7 +4,7 @@ import os
 import re
 import uuid
 import requests
-import fitz  
+import pymupdf as fitz  
 import base64
 from flask_login import (
     LoginManager, UserMixin,
@@ -399,141 +399,97 @@ def favicon():
 
 @app.route('/api/createwithai')
 def createai():
-    # 1. Grab all arguments before entering the generator context
     message = request.args.get('message')
     target_questions = request.args.get('target', 5)
     existingcards = request.args.get('cards', '[]')
 
     @stream_with_context
     def generate():
-        # Validation
         if not message:
             yield f"data: {json.dumps({'error': 'No prompt provided'})}\n\n"
             return
 
+        yield f"data: {json.dumps({'status': 'Agent is analyzing the topic...'})}\n\n"
+        
+        # --- Phase 1: Agent Planning ---
+        plan_prompt = f"""
+        You are an expert study agent preparing to make {target_questions} flashcards about: "{message}".
+        Determine the best web search query to gather accurate, factual information for this topic.
+        Respond ONLY with a JSON object in this format: {{"search_query": "your query here"}}
+        If no web search is needed (e.g., for basic math, general grammar, etc.), return {{"search_query": null}}.
+        """
+        
+        search_query = None
+        try:
+            plan_res = ask(plan_prompt)
+            plan_json_match = re.search(r'\{.*?\}', plan_res, re.DOTALL)
+            if plan_json_match:
+                plan_data = json.loads(plan_json_match.group(0))
+                search_query = plan_data.get("search_query")
+        except Exception:
+            pass # If planning fails, we gracefully degrade to memory-only generation
+
+        # --- Phase 2: Agent Searching ---
+        search_context = ""
+        if search_query:
+            yield f"data: {json.dumps({'status': f'Agent searching web for: \"{search_query}\"...'})}\n\n"
+            try:
+                results = search(search_query, type="web")
+                if results:
+                    # Grab snippets from the top 5 results to feed the LLM
+                    snippets = [res.get('description', '') for res in results[:5]]
+                    search_context = "Use the following factual search results to build the flashcards:\n- " + "\n- ".join(snippets)
+                    yield f"data: {json.dumps({'status': 'Agent reading search results...'})}\n\n"
+                else:
+                    yield f"data: {json.dumps({'status': 'No search results found, relying on memory...'})}\n\n"
+            except Exception:
+                yield f"data: {json.dumps({'status': 'Search failed, relying on memory...'})}\n\n"
+
+        # --- Phase 3: Agent Drafting ---
+        max_iterations = 3
         accumulated_context = ""
-        max_iterations = 20
 
         try:
             for i in range(max_iterations):
+                yield f"data: {json.dumps({'status': f'Agent drafting flashcards (Attempt {i+1}/{max_iterations})...'})}\n\n"
+                
+                prompt = f"""
+                You are an expert study assistant. Generate exactly {target_questions} flashcards about: "{message}".
+                
+                {search_context}
+                
+                Do not duplicate any of these existing cards: {existingcards}
+                {accumulated_context}
 
-                agent_prompt = f"""
-                Topic: {message}
-                Research so far: {accumulated_context if accumulated_context else "No data yet."}
-
-                You are an AI agent that is for making educational flashcards for a flash card website. You must gather enough data to try and create {target_questions} more or start creating educational flashcards.
-                These are the cards that already exist: {existingcards}
-                Make sure to never duplicate or include already included info.
-                You only have {max_iterations} iterations. This is iteration {i+1}.
-                try to mostly use the information from the search to create the cards.
-
-                INSTRUCTIONS:
-                First, briefly write out your reasoning/thought process.
-                Then, you MUST call exactly ONE of the following functions at the end of your response:
-
-                1. search("your search query")
-                   - Use this to get more info. Max 5 words.
-                2. exit([{{ "question": "...", "answer": "...", "image": null }}, ...])
-                   - Use this when you have sufficient info. Pass the JSON array of cards as the argument.
-                3.fetch("url")
-                    - Use this to fetch raw html from a website when you gather links from searches.
-                4.respond("status update")
-                    - Use this to send a snippet of text to the user to tell them what is happenning make sure to include this in all your responses so the user knows what you are doing.
-                NEVER dont include a respond() in your response, this is how you will communicate to the user. Always include a respond() with a message about what you are doing. If you are searching include what you are searching for, if you are fetching include what you are fetching, if you are exiting include that you are exiting and how many cards you have created.
-                Example Response:
-                I need to find out the population of France to finish the last card.
-                search("population of France")
-                respond("Searching for population of France to finish card 5")
+                You must return ONLY a JSON array of objects, where each object has a "question" and "answer" string key. 
+                Enclose the array in ```json ... ``` blocks.
                 """
-
-                # Call your existing 'ask' function
-                ai_response = ask(agent_prompt).strip()
-
-                if "rate limit reached" in ai_response.lower():
-                    yield f"data: {json.dumps({'error': 'Rate limited by AI provider'})}\n\n"
+                
+                ai_response = ask(prompt)
+                
+                if "Rate limit reached" in ai_response or "An error occurred" in ai_response:
+                    yield f"data: {json.dumps({'error': ai_response})}\n\n"
                     return
-
-                # --- REGEX PARSING FOR FUNCTIONS ---
-                # re.DOTALL ensures .* matches across multiple lines (crucial for JSON arrays)
-                # --- REGEX PARSING FOR FUNCTIONS ---
-                exit_match = re.search(r'exit\((.*)\)', ai_response, re.DOTALL)
-                search_match = re.search(r'search\([\'"](.*?)[\'"]\)', ai_response)
-                fetch_match = re.search(r'fetch\([\'"](.*?)[\'"]\)', ai_response)
-                respond_match = re.search(r'respond\([\'"](.*?)[\'"]\)', ai_response)
-
-                # Safely extract the status message
-                status_message = 'Thinking...'
-                if respond_match and respond_match.group(1).strip():
-                    status_message = respond_match.group(1).strip()
-                # OPTION 1: EXIT (Success)
+                
+                # Try to extract the array using markdown tags, fallback to brackets
+                exit_match = re.search(r'```json(.*?)```', ai_response, re.DOTALL)
+                if not exit_match:
+                    exit_match = re.search(r'(\[.*?\])', ai_response, re.DOTALL)
+                
                 if exit_match:
-                    raw_json = exit_match.group(1).strip()
-                    # Extract the reasoning by removing the function call from the total string
-                    reasoning = ai_response.replace(exit_match.group(0), "").strip()
-                    
-
-                    clean_json = raw_json.replace("```json", "").replace("```", "").strip()
-                    
+                    clean_json = exit_match.group(1).replace("```json", "").replace("```", "").strip()
                     try:
                         card_set = json.loads(clean_json)
+                        # Success! Yield the final result and terminate the generator
                         yield f"data: {json.dumps({'status': 'complete', 'cards': card_set})}\n\n"
                         return
-                    except json.JSONDecodeError:
-                        yield f"data: {json.dumps({'status': 'AI malformed JSON, retrying...'})}\n\n"
-                        accumulated_context += "\nSystem Note: Your last exit() call had invalid JSON. Try again."
-                        continue
-
-                # OPTION 2: SEARCH
-                elif search_match:
-                    query = search_match.group(1).strip()
-                    # Extract the reasoning
-                    reasoning = ai_response.replace(search_match.group(0), "").strip()
-                    
-                    yield f"data: {json.dumps({'status': respond_match.group(1).strip()})}\n\n"
-                    
-                    search_results = search(query, type="web")
-                    context = "\n\n".join(
-                        f"[{r.get('title')}]({r.get('url')})\n{r.get('description')}" 
-                        for r in search_results[:30]
-                    )
-                    accumulated_context += context
-                    continue 
-                # OPTION 3: FETCH
-                elif fetch_match:
-                    url = fetch_match.group(1).strip()
-                    reasoning = ai_response.replace(fetch_match.group(0), "").strip()
-                    
-                    
-                    yield f"data: {json.dumps({'status': respond_match.group(1).strip()})}\n\n"
-                    
-                    try:
-                        res = requests.get(url, timeout=5)
-                        if res.status_code == 200:
-                            accumulated_context += f"\nFetched Content from {url}:\n{res.text[:500]}\n"  # Limit to first 500 chars
-                        else:
-                            accumulated_context += f"\nFailed to fetch {url}: Status code {res.status_code}\n"
-                    except Exception as e:
-                        accumulated_context += f"\nError fetching {url}: {str(e)}\n"
-                    continue
-                # Fallback: The AI forgot to call a function
+                    except Exception:
+                        accumulated_context = "Your previous response contained invalid JSON syntax. Please fix it."
                 else:
-                    yield f"data: {json.dumps({'status': 'AI is thinking...'})}\n\n"
-                    accumulated_context += "\nSystem Note: You didn't call search(\"...\") or exit([...]). Please output a valid function call."
-                    continue
-            # If we exit the loop without returning (Max iterations reached)
-            exitcards = ask(agent_prompt + "\n This is your last iteration. You MUST use the exit([...]) function with the cards in JSON format.")
-            exit_match = re.search(r'exit\((.*)\)', exitcards, re.DOTALL)
-            
-            if exit_match:
-                clean_json = exit_match.group(1).replace("```json", "").replace("```", "").strip()
-                try:
-                    card_set = json.loads(clean_json)
-                    yield f"data: {json.dumps({'status': 'complete', 'cards': card_set})}\n\n"
-                except:
-                    yield f"data: {json.dumps({'error': 'Final output was not valid JSON.'})}\n\n"
-            else:
-                 yield f"data: {json.dumps({'error': 'Failed to generate cards within iteration limit.'})}\n\n"
-            return
+                    accumulated_context = "Your previous response was missing the JSON array. Please ensure you output strict JSON."
+
+            # If the loop finishes without hitting `return`
+            yield f"data: {json.dumps({'error': 'Agent failed to generate valid flashcards within the iteration limit.'})}\n\n"
 
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
