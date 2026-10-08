@@ -611,38 +611,95 @@ function check(ele) {
     }
     updatecount();
 }
+let pendingMoveOn = null;
 
-        function startTimer(seconds, color) {
-            clearInterval(timerInterval);
-            document.getElementById('test').classList.add('pointer-events-none');
-            timerBar.style.width = '100%';
-            
-            //timerBar.classList.remove('bg-red-500/10', 'bg-green-500/10'); 
-            //const colorName = color || 'green';
-            //timerBar.classList.add(`bg-${colorName}-500`); // Made slightly brighter for visibility
-            
-            const totalTime = seconds * 1000; 
-            let timeLeft = totalTime;
-            const intervalRate = 10; 
-            
-            timerInterval = setInterval(() => {
-                timeLeft -= intervalRate;
-                const percentage = (timeLeft / totalTime) * 100;
-                timerBar.style.width = `${percentage}%`;
+function showTestComplete(testEl) {
+    testEl.classList.add('grid', 'grid-cols-2', 'gap-4', 'grid-rows-[auto_1fr]', 'items-center', 'justify-items-center');
+    testEl.innerHTML = `
+<div class="flex flex-col items-center justify-center w-full h-full gap-8 p-10 animate-in fade-in zoom-in duration-300">
+    <h1 class="text-5xl font-extrabold tracking-tight text-white drop-shadow-md">
+        Test Complete
+    </h1>
 
-                if (timeLeft <= 0) {
-                    clearInterval(timerInterval);
-                    timerBar.style.width = '0%';
-                    
-                    showtestquestion(++currentQuestion);
-                    document.getElementById('test').classList.remove('pointer-events-none');
-                    
-                    const el = document.getElementById('test');
-                    el.classList.remove('border-red-500/20', 'border-green-500/20', 'bg-green-500/10', 'bg-red-500/10');
-                    el.classList.add('border-white/30', 'bg-white/10');
-                }
-            }, intervalRate);
+    <div class="flex flex-wrap justify-center gap-6 w-full max-w-2xl">
+        <div class="flex-1 min-w-[120px] bg-green-500/20 border border-green-500/30 backdrop-blur-xl p-6 rounded-2xl text-center shadow-lg transition-transform hover:scale-105">
+            <p class="text-xs uppercase tracking-[0.2em] opacity-70 mb-1">Right</p>
+            <p class="text-4xl font-bold text-green-400">${rightq}</p>
+        </div>
+
+        <div class="flex-1 min-w-[120px] bg-red-500/20 border border-red-500/30 backdrop-blur-xl p-6 rounded-2xl text-center shadow-lg transition-transform hover:scale-105">
+            <p class="text-xs uppercase tracking-[0.2em] opacity-70 mb-1">Wrong</p>
+            <p class="text-4xl font-bold text-red-400">${wrongq}</p>
+        </div>
+
+        <div class="flex-1 min-w-[120px] bg-white/10 border border-white/20 backdrop-blur-xl p-6 rounded-2xl text-center shadow-lg transition-transform hover:scale-105">
+            <p class="text-xs uppercase tracking-[0.2em] opacity-70 mb-1">Score</p>
+            <p class="text-4xl font-bold text-blue-400">
+                ${rightq + wrongq > 0 ? Math.round((rightq / (rightq + wrongq)) * 100) : 0}%
+            </p>
+        </div>
+    </div>
+
+    <button onclick="location.reload()" class="mt-4 px-8 py-3 bg-white/10 hover:bg-white/20 border border-white/30 rounded-full transition-all text-sm uppercase tracking-widest font-semibold">
+        Restart Test
+    </button>
+</div>`;
+}
+
+function startTimer(seconds, color) {
+    const FEEDBACK_MS = 1; // fixed flash time; `seconds` is intentionally ignored
+    const testEl = document.getElementById('test');
+    const colorName = color || 'green';
+    const feedbackClasses = ['border-red-500/20', 'border-green-500/20', 'bg-green-500/10', 'bg-red-500/10'];
+
+    // Clear anything left over from a previous call
+    clearTimeout(timerInterval);
+    if (pendingMoveOn) {
+        document.removeEventListener('click', pendingMoveOn);
+        document.removeEventListener('keydown', pendingMoveOn);
+        pendingMoveOn = null;
+    }
+
+    testEl.classList.add('pointer-events-none');
+    timerBar.style.width = '100%';
+    timerBar.classList.remove('bg-red-500/10', 'bg-green-500/10');
+    timerBar.classList.add(`bg-${colorName}-500/10`);
+
+    timerInterval = setTimeout(() => {
+        timerBar.style.width = '0%';
+
+        // Shade the test box green if right, red if wrong
+        testEl.classList.remove('border-white/30', 'bg-white/10', ...feedbackClasses);
+        if (colorName === 'green') {
+            testEl.classList.add('border-green-500/20', 'bg-green-500/10');
+        } else if (colorName === 'red') {
+            testEl.classList.add('border-red-500/20', 'bg-red-500/10');
         }
+
+        const handleMoveOn = (e) => {
+            if (e.type === 'keydown' && e.repeat) return; // ignore held keys
+
+            document.removeEventListener('click', handleMoveOn);
+            document.removeEventListener('keydown', handleMoveOn);
+            pendingMoveOn = null;
+
+            // Reset box styling and interactions
+            testEl.classList.remove('pointer-events-none', ...feedbackClasses);
+            testEl.classList.add('border-white/30', 'bg-white/10');
+
+            if (currentQuestion + 1 > test.length - 1) {
+                currentQuestion++;
+                showTestComplete(testEl);
+            } else {
+                showtestquestion(++currentQuestion);
+            }
+        };
+
+        pendingMoveOn = handleMoveOn;
+        document.addEventListener('click', handleMoveOn);
+        document.addEventListener('keydown', handleMoveOn);
+    }, FEEDBACK_MS);
+}
 
         function truncateToDetails(text, lineLimit = 3) {
             if (text.startsWith('data:image') || text.startsWith('http')) return text;

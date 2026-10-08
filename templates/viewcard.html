@@ -666,8 +666,10 @@ function check(ele){
     updatecount()
 }
 function startTimer(seconds, color) {
+    seconds = 0.1
     clearInterval(timerInterval);
-    document.getElementById('test').classList.add('pointer-events-none')
+    const testEl = document.getElementById('test');
+    testEl.classList.add('pointer-events-none');
     timerBar.style.width = '100%';
     
     timerBar.classList.remove('bg-red-500/10', 'bg-green-500/10'); 
@@ -677,20 +679,34 @@ function startTimer(seconds, color) {
     const totalTime = seconds * 1000; 
     let timeLeft = totalTime;
     const intervalRate = 10; 
+    
     timerInterval = setInterval(() => {
         timeLeft -= intervalRate;
         const percentage = (timeLeft / totalTime) * 100;
-        timerBar.style.width = `${percentage}%`;
+        timerBar.style.width = `100%`;
 
         if (timeLeft <= 0) {
             clearInterval(timerInterval);
             timerBar.style.width = '0%';
-            
-            showtestquestion(++currentQuestion);
-            if (currentQuestion > (test.length - 1)) {
-                const test = document.getElementById('test')
-                test.classList.add('grid', 'grid-cols-2', 'gap-4', 'rows-[auto_1fr]', 'align-items-center', 'justify-items-center');
-                test.innerHTML = `
+            const body = document.getElementsByTagName('body')[0]
+            // Shade the test box green if they got it right, red if wrong
+            testEl.classList.remove('border-white/30', 'bg-white/10', 'border-red-500/20', 'border-green-500/20', 'bg-green-500/10', 'bg-red-500/10');
+            if (colorName === 'green') {
+                testEl.classList.add('border-green-500/20', 'bg-green-500/10');
+            } else if (colorName === 'red') {
+                testEl.classList.add('border-red-500/20', 'bg-red-500/10');
+            }
+            // Function to handle moving on to the next question
+            const handleMoveOn = (e) => {
+                // Remove listeners so it only fires once
+                document.removeEventListener('click', handleMoveOn);
+                document.removeEventListener('keydown', handleMoveOn);
+                
+                showtestquestion(++currentQuestion);
+                
+                if (currentQuestion > (test.length - 1)) {
+                    testEl.classList.add('grid', 'grid-cols-2', 'gap-4', 'rows-[auto_1fr]', 'align-items-center', 'justify-items-center');
+                    testEl.innerHTML = `
 <div class="flex flex-col items-center justify-center w-full h-full gap-8 p-10 animate-in fade-in zoom-in duration-300">
     <h1 class="text-5xl font-extrabold tracking-tight text-white drop-shadow-md">
         Test Complete
@@ -722,11 +738,18 @@ function startTimer(seconds, color) {
     </button>
 </div>
                     `;
-            }
-            document.getElementById('test').classList.remove('pointer-events-none')
-            const ele2 = document.getElementById('test');
-            ele2.classList.remove('border-red-500/20', 'border-green-500/20', 'bg-green-500/10', 'bg-red-500/10');
-            ele2.classList.add('border-white/30', 'bg-white/10');
+                }
+                
+                // Reset test box styling and interactions
+                testEl.classList.remove('pointer-events-none', 'border-red-500/20', 'border-green-500/20', 'bg-green-500/10', 'bg-red-500/10');
+                testEl.classList.add('border-white/30', 'bg-white/10');
+            };
+
+            // Add a 50ms delay before attaching the event listeners. 
+            // This prevents the original user click (that may have started the timer) 
+            // from accidentally skipping the wait screen instantly.
+                document.addEventListener('click', handleMoveOn);
+                document.addEventListener('keydown', handleMoveOn)
         }
     }, intervalRate);
 }

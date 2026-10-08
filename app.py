@@ -432,7 +432,7 @@ def createai():
         # --- Phase 2: Agent Searching ---
         search_context = ""
         if search_query:
-            yield f"data: {json.dumps({'status': f'Agent searching web for: \"{search_query}\"...'})}\n\n"
+            yield f"data: {json.dumps({'status': f'Agent searching web for: {search_query}...'})}\n\n"
             try:
                 results = search(search_query, type="web")
                 if results:
